@@ -4,47 +4,42 @@ import os
 load_dotenv()
 
 # OpenAI
-from langchain.tools import Tool
-from langchain.agents import ZeroShotAgent, Tool, AgentExecutor
-from langchain.memory import ConversationBufferMemory
-from langchain import OpenAI, LLMChain
-from langchain.utilities import GoogleSearchAPIWrapper
-
-OpenAI.api_key = os.environ['OPENAI_API_KEY']
+from langchain import OpenAI
+from langchain.chains.conversation.memory import ConversationBufferMemory
+from langchain.chains import ConversationChain
+from langchain.prompts.prompt import PromptTemplate
 
 
-
-search = GoogleSearchAPIWrapper()
-tools = [
-    Tool(
-        name = "Search",
-        func=search.run,
-        description="useful for when you need to answer questions about current events"
-    )
-]
-
-prefix = """Have a conversation with a human, answering the following questions as best you can. You have access to the following tools:"""
-suffix = """Begin!"
-
-{chat_history}
-Question: {input}
-{agent_scratchpad}"""
-
-prompt = ZeroShotAgent.create_prompt(
-    tools, 
-    prefix=prefix, 
-    suffix=suffix, 
-    input_variables=["input", "chat_history", "agent_scratchpad"]
+# first initialize the large language model
+llm = OpenAI(
+	temperature=0,
+	openai_api_key= os.getenv("OPENAI_API_KEY"),
+	model_name="text-davinci-003"
 )
-memory = ConversationBufferMemory(memory_key="chat_history")
 
-llm_chain = LLMChain(llm=OpenAI(temperature=0), prompt=prompt)
-agent = ZeroShotAgent(llm_chain=llm_chain, tools=tools, verbose=True)
-agent_chain = AgentExecutor.from_agent_and_tools(agent=agent, tools=tools, verbose=True, memory=memory)
+template = """This is a conversation between a human and Pirate that talks a lot about the sea whenever they can 
+
+Current conversation:
+{history}
+Human: {input}
+Pirate:"""
+PROMPT = PromptTemplate(
+    input_variables=["history", "input"], template=template
+)
+
+# now initialize the conversation chain
+conversation = ConversationChain(
+    prompt=PROMPT,
+	llm=llm,
+    verbose=True,
+	memory=ConversationBufferMemory(human_prefix="Pirate")
+
+    
+)
 
 app = Flask(__name__)
 
 @app.route('/api/new-input', methods=['POST'])
 def newInput():
-    return agent_chain.run(input=str(request.json))
+    return conversation.predict(input=str(request.data))
 
