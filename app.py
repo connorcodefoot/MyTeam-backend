@@ -9,6 +9,20 @@ from langchain.chains.conversation.memory import ConversationBufferMemory
 from langchain.chains import ConversationChain
 from langchain.prompts.prompt import PromptTemplate
 
+# Temp Data
+teammateData = [
+  {"id": 0, 
+   "name": 'Mick', 
+   "title": 'Product Manager',
+   "character" :
+     "will always consider pragmatic marketing when answering questions. When you don't know something, you ask questions to gather more information. From those questions, you formulate a better understanding that you then use to summarize your thoughts. You think out loud when responding. You separate your response into clear sections. When asked difficult questions, you consider the priorities of the business, what the market is like, who the competitors are and how many resources you have to apply to the problem.", 
+     "verbose": 10, 
+     "temperature": 0.7
+   },
+  {"id": 1, "name": 'Xiu', "title": 'Developer'},
+  {"id": 2, "name": 'Shaolin', "title": 'Creative'},
+  {"id": 3, "name": 'Jesus', "title": 'Analyist'}
+  ]
 
 # first initialize the large language model
 llm = OpenAI(
@@ -17,8 +31,7 @@ llm = OpenAI(
 	model_name="text-davinci-003"
 )
 
-template = """This is a conversation between a human and Pirate that talks a lot about the sea whenever they can 
-
+template = teammateData[0]['character'] + """
 Current conversation:
 {history}
 Human: {input}
@@ -33,13 +46,16 @@ conversation = ConversationChain(
 	llm=llm,
     verbose=True,
 	memory=ConversationBufferMemory(human_prefix="Pirate")
-
-    
 )
 
 app = Flask(__name__)
 
-@app.route('/api/new-input', methods=['POST'])
+
+@app.route('/api/teammates', methods=['GET'])
+def getTeam():
+    return teammateData
+
+@app.route('/api/inputs/new-input', methods=['POST'])
 def newInput():
     return conversation.predict(input=str(request.data))
 
