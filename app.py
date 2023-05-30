@@ -9,6 +9,8 @@ from langchain.chains.conversation.memory import ConversationBufferMemory
 from langchain.chains import ConversationChain
 from langchain.prompts.prompt import PromptTemplate
 
+app = Flask(__name__)
+
 # Temp Data
 teammateData = [
   {"id": 0, 
@@ -47,9 +49,6 @@ conversation = ConversationChain(
     verbose=True,
 	memory=ConversationBufferMemory(human_prefix="Product Manager")
 )
-
-app = Flask(__name__)
-
 
 @app.route('/api/teammates', methods=['GET'])
 def getTeam():
