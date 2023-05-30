@@ -35,7 +35,7 @@ template = teammateData[0]['character'] + """
 Current conversation:
 {history}
 Human: {input}
-Pirate:"""
+Product Manager:"""
 PROMPT = PromptTemplate(
     input_variables=["history", "input"], template=template
 )
@@ -45,7 +45,7 @@ conversation = ConversationChain(
     prompt=PROMPT,
 	llm=llm,
     verbose=True,
-	memory=ConversationBufferMemory(human_prefix="Pirate")
+	memory=ConversationBufferMemory(human_prefix="Product Manager")
 )
 
 app = Flask(__name__)
