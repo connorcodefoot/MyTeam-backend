@@ -27,19 +27,9 @@ teammateData = [
   {"id": 3, "name": 'Jesus', "title": 'Analyist'}
   ]
 
-conversations = [
-    {"id": 0, "teammateID": 0 },
-    {"id": 1, "teammateID": 1 },
-    {"id": 2, "teammateID": 2 },
-    {"id": 3, "teammateID": 3 }
-]
+conversations = []
 
-messages = [
-    {"id": 0, "teammateID": 0, "conversationID": 0, "to": 0, "from": 0, "content": "Conversation 0" },
-    {"id": 1, "teammateID": 1, "conversationID": 0, "to": 0, "from": 0, "content": "Conversation 1" },
-    {"id": 2, "teammateID": 2, "conversationID": 0, "to": 0, "from": 0, "content": "Conversation 2" },
-    {"id": 3, "teammateID": 3, "conversationID": 0, "to": 0, "from": 0, "content": "Conversation 3" },
-]
+messages = []
 
 class Conversation:
 
@@ -72,14 +62,6 @@ class Conversation:
 
 oneConvo = Conversation(0)
 
-
-
-# first initialize the large language model
-
-
-# now initialize the conversation chain
-
-
 @app.route('/api/teammates', methods=['GET'])
 def getTeam():
     return teammateData
@@ -93,5 +75,5 @@ def newConversation():
     data = request.get_json()
     conversation_id = data.get('data')
     conversation = Conversation(conversation_id)
-    print(conversation)
-    return jsonify({'conversation_id': conversation.id})
+    conversations.append(conversation)
+    return jsonify(conversation.id)
