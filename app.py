@@ -22,63 +22,47 @@ teammateData = [
      "temperature": 0.7,
     "conversation_id": 0,
    },
-  {"id": 1, "name": 'Xiu', "title": 'Developer'},
+  {"id": 1, "name": 'Xiu', "title": 'Pirate', "character" : 'You are a pirate'},
   {"id": 2, "name": 'Shaolin', "title": 'Creative'},
   {"id": 3, "name": 'Jesus', "title": 'Analyist'}
   ]
 
-conversations = [
-    {"id": 0, "teammateID": 0 },
-    {"id": 1, "teammateID": 1 },
-    {"id": 2, "teammateID": 2 },
-    {"id": 3, "teammateID": 3 }
-]
+conversations = []
 
-messages = [
-    {"id": 0, "teammateID": 0, "conversationID": 0, "to": 0, "from": 0, "content": "Conversation 0" },
-    {"id": 1, "teammateID": 1, "conversationID": 0, "to": 0, "from": 0, "content": "Conversation 1" },
-    {"id": 2, "teammateID": 2, "conversationID": 0, "to": 0, "from": 0, "content": "Conversation 2" },
-    {"id": 3, "teammateID": 3, "conversationID": 0, "to": 0, "from": 0, "content": "Conversation 3" },
-]
+messages = []
 
 class Conversation:
-
-    llm = OpenAI(
-	    temperature=0,
-	    openai_api_key= os.getenv("OPENAI_API_KEY"),
-	    model_name="text-davinci-003"
-    )
-    template = teammateData[0]['character'] + """
-        Current conversation:
-        {history}
-        Coworker: {input}
-        Product Manager:"""
-    
-    PROMPT = PromptTemplate(
-        input_variables=["history", "input"], template=template
-    )   
-
-    conversation = ConversationChain(
-    prompt=PROMPT,
-	llm=llm,
-    verbose=True,
-	memory=ConversationBufferMemory(ai_prefix="Product Manager", human_prefix="Coworker")
-    )
-
     def __init__(self, id):
-
         self.id = id
+        self.llm = OpenAI(
+            temperature=0,
+            openai_api_key=os.getenv("OPENAI_API_KEY"),
+            model_name="text-davinci-003"
+        )
+        self.template = teammateData[id]['character'] + """
+            Current conversation:
+            {history}
+            Coworker: {input}
+            Product Manager:"""
 
+        self.PROMPT = PromptTemplate(
+            input_variables=["history", "input"], template=self.template
+        )
 
-oneConvo = Conversation(0)
+        self.conversation = ConversationChain(
+            prompt=self.PROMPT,
+            llm=self.llm,
+            verbose=True,
+            memory=ConversationBufferMemory(ai_prefix=teammateData[id]['title'], human_prefix="Coworker")
+        )
 
+    def print_conversation(self):
+        print("Conversation ID:", self.id)
+        print("Conversation Chain:", self.conversation)
 
-
-# first initialize the large language model
-
-
-# now initialize the conversation chain
-
+    def predict(self, input):
+        return self.conversation.predict(input=str(input))
+        
 
 @app.route('/api/teammates', methods=['GET'])
 def getTeam():
@@ -86,12 +70,16 @@ def getTeam():
 
 @app.route('/api/inputs/new-input', methods=['POST'])
 def newInput():
-    return oneConvo.conversation.predict(input=str(request.data))
+
+    data = request.json
+    conversationID = int(data.get('conversationID'))
+    input = data.get('input')
+    return conversations[conversationID].predict(input)
 
 @app.route('/api/conversations/new' , methods =['POST'])
 def newConversation():
     data = request.get_json()
     conversation_id = data.get('data')
     conversation = Conversation(conversation_id)
-    print(conversation)
-    return jsonify({'conversation_id': conversation.id})
+    conversations.append(conversation)
+    return jsonify(conversation.id)
