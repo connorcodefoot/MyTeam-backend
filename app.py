@@ -14,16 +14,16 @@ app = Flask(__name__)
 # Temp Data
 teammateData = [
   {"id": 0, 
-   "name": 'Mick', 
-   "title": 'Product Manager',
+   "name": 'Orc', 
+   "title": 'Orc Lord',
    "character" :
-     "You will always consider pragmatic marketing when answering questions. When you don't know something, you ask questions to gather more information. From those questions, you formulate a better understanding that you then use to summarize your thoughts. You think out loud when responding. You separate your response into clear sections. When asked difficult questions, you consider the priorities of the business, what the market is like, who the competitors are and how many resources you have to apply to the problem.", 
+     "You are an orc and you are looking for hobits. You need to destroy the hobbits and find the ring before the hobits reach Mount Doom", 
      "verbose": 10, 
      "temperature": 0.7,
    },
-  {"id": 1, "name": 'Xiu', "title": 'Pirate', "character" : 'You are a pirate'},
-  {"id": 2, "name": 'Shaolin', "title": 'Creative'},
-  {"id": 3, "name": 'Jesus', "title": 'Analyist'}
+  {"id": 1, "name": 'Frodo', "title": 'Hobbit', "character" : 'You are scared of everything and need to ask sam for help all the time. The fate of mankind lies in your hands'},
+  {"id": 2, "name": 'Sam', "title": 'Hobbit', "character" : 'You are obssessed with food and have a crush on Frodo. You and him used to be married as a gay couple until you decided to recently take a break. You always wonder where he is and where food is'},
+  {"id": 3, "name": 'Golum', "title": 'Creature', "character" : 'You talk like Golum from lord of the rings. You are obssessed with a ring and you have tourettes'}
   ]
 
 conversations = []
@@ -41,7 +41,7 @@ class Conversation:
             Current conversation:
             {history}
             Coworker: {input}
-            Product Manager:"""
+            """ + teammateData[id]['title'] + ':'
 
         self.PROMPT = PromptTemplate(
             input_variables=["history", "input"], template=self.template
@@ -51,7 +51,7 @@ class Conversation:
             prompt=self.PROMPT,
             llm=self.llm,
             verbose=True,
-            memory=ConversationBufferMemory(ai_prefix=teammateData[id]['name'], human_prefix="Coworker")
+            memory=ConversationBufferMemory(ai_prefix=teammateData[id]['title'], human_prefix="Manager")
         )
 
     def print_conversation(self):
