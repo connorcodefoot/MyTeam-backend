@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify
 from dotenv.main import load_dotenv
 import os
+import random
 load_dotenv()
 
 # OpenAI
@@ -66,11 +67,30 @@ class Conversation:
             'id': len(self.messages) + 1,
             'message': message
         })
+
+
+class Teammate: 
+    def __init__(self, name, title, character, verbose, temperature):
+        self.id = random.randint(1, 10000),
+        self.name = name,
+        self.title = title,
+        self.character = character,
+        self.verbose = verbose,
+        self.temperature = temperature
         
 
 @app.route('/api/teammates', methods=['GET'])
 def getTeam():
     return teammateData
+
+@app.route('/api/teammates/new', methods=['POST'])
+def newTeammate():
+
+    data = request.json
+    print(data)
+     
+    teammate = Teammate(data['name'], data['title'], data['character'], data['verbose'], data['temperature'])
+    return jsonify(teammate.id)
 
 @app.route('/api/inputs/new-input', methods=['POST'])
 def newInput():
