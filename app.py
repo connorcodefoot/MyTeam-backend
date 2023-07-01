@@ -1,22 +1,36 @@
+# General Config
+from flask import Flask, request, jsonify
+from dotenv.main import load_dotenv
+from werkzeug.utils import secure_filename
+
+import os
+load_dotenv()
+
+# LangChain and OpenAI
 from langchain.prompts.prompt import PromptTemplate
 from langchain.chains import ConversationChain
 from langchain.chains.conversation.memory import ConversationBufferMemory
 from langchain import OpenAI
-from flask import Flask, request, jsonify
-from dotenv.main import load_dotenv
-import os
-import random
-load_dotenv()
+from langchain.tools import Tool
+from langchain.utilities import GoogleSearchAPIWrapper
 
-# OpenAI
+## Google Search for Langchain global params
+google_api_key=os.getenv("GOOGLE_API_KEY")
+google_cse_id=os.getenv("GOOGLE_CSE_ID")
+search = GoogleSearchAPIWrapper()
 
+# Picovoice 
+import pvleopard
+picovoice_access_key = os.getenv("PICOVOICE_ACCESS_KEY")
+handle = pvleopard.create(picovoice_access_key)
+
+# Initiate App
 app = Flask(__name__)
 
 # Temp Data
 teammateData = []
 
 conversations = []
-
 
 class Conversation:
 
@@ -49,6 +63,12 @@ class Conversation:
             verbose=True,
             memory=ConversationBufferMemory(
                 ai_prefix=teammate.title, human_prefix="Manager")
+        )
+
+        self.googleTool = Tool(
+            name="Google Search",
+            description="Search Google for recent results.",
+            func=search.run,
         )
 
     def print_conversation(self):
@@ -89,6 +109,7 @@ class Teammate:
         }
 
 
+
 # ROUTES
 
 @app.route('/api/teammates', methods=['GET'])
@@ -109,19 +130,45 @@ def newTeammate():
     return jsonify(teammate.id)
 
 
-@app.route('/api/inputs/new-input', methods=['POST'])
-def newInput():
+@app.route('/api/messages/new-message-text', methods=['POST'])
+def newMessage():
 
     # Parse Data
     data = request.json
-    conversationID = int(data.get('conversationID'))
+    conversation_id = int(data.get('conversationID'))
     input = data.get('input')
 
     # Find conversation with matching ID
-    conversation = next((convo for convo in conversations if convo.id == conversationID), None)
+    conversation = next((convo for convo in conversations if convo.id == conversation_id), None)
+    if conversation and "search" in input:
+        conversation.newMessage(input)
+        return conversation.googleTool.run(input)
     if conversation:
         conversation.newMessage(input)
         return conversation.predict(input)
+    else:
+        print("Conversation not found")
+
+@app.route('/api/messages/new-message-audio', methods=['POST'])
+def newMessageAudio():
+
+    print('request received')
+
+    # Retrieve Data
+    conversation_id = request.form['conversationID']
+    audio = request.files['file']
+
+    # Save audio and get transcript
+    audio_filename = secure_filename(audio.filename)
+    audio_path = os.path.join('audioMessages', audio_filename)
+    audio.save(audio_path)
+    transcript, words = handle.process_file(audio_path)
+
+    # Find conversation with matching ID
+    conversation = next((convo for convo in conversations if convo.id == conversation_id), None)
+    if conversation:
+        conversation.newMessage(transcript)
+        return conversation.predict(transcript)
     else:
         print("Conversation not found")
 
