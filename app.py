@@ -42,7 +42,7 @@ teammateData = []
 
 conversations = []
 
-
+print('test')
 class Conversation:
 
     def __init__(self, teammate):
