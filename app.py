@@ -2,9 +2,16 @@
 from flask import Flask, request, jsonify
 from dotenv.main import load_dotenv
 from werkzeug.utils import secure_filename
-
 import os
-load_dotenv()
+import math
+
+load_dotenv ()
+
+# Supabase
+from supabase import create_client
+supabaseURL = os.environ.get("SUPABASE_URL")
+supabaseKey = os.environ.get("SUPABASE_KEY")
+supabase = create_client(supabaseURL, supabaseKey)
 
 # LangChain and OpenAI
 from langchain.prompts.prompt import PromptTemplate
@@ -15,8 +22,8 @@ from langchain.tools import Tool
 from langchain.utilities import GoogleSearchAPIWrapper
 
 ## Google Search for Langchain global params
-google_api_key=os.getenv("GOOGLE_API_KEY")
-google_cse_id=os.getenv("GOOGLE_CSE_ID")
+google_api_key= os.getenv("GOOGLE_API_KEY")
+google_cse_id= os.getenv("GOOGLE_CSE_ID")
 search = GoogleSearchAPIWrapper()
 
 # Picovoice 
@@ -28,9 +35,13 @@ handle = pvleopard.create(picovoice_access_key)
 app = Flask(__name__)
 
 # Temp Data
+
+database = supabase.table("teammates").select("*").execute() 
+
 teammateData = []
 
 conversations = []
+
 
 class Conversation:
 
@@ -42,12 +53,12 @@ class Conversation:
         self.teammateID = teammate.id
         self.messages = []
         self.llm = OpenAI(
-            temperature=0,
+            temperature=teammate.creativity,
             openai_api_key=os.getenv("OPENAI_API_KEY"),
             model_name="text-davinci-003"
         )
 
-        self.template = teammate.character + """
+        self.template = teammate.persona + """
             Current conversation:
             {history}
             Coworker: {input}
@@ -89,23 +100,23 @@ class Teammate:
 
     next_id = 0
 
-    def __init__(self, name, title, character, verbose, temperature):
+    def __init__(self, name, title, persona, verbosity, creativity):
         self.id = Teammate.next_id
         Teammate.next_id += 1
         self.name = name
         self.title = title
-        self.character = character
-        self.verbose = verbose
-        self.temperature = temperature
+        self.persona = persona
+        self.verbosity = verbosity
+        self.creativity = creativity
 
     def to_dict(self):
         return {
         'id': self.id,
         'name': self.name,
         'title': self.title,
-        'character': self.character,
-        'verbose': self.verbose,
-        'temperature': self.temperature
+        'persona': self.persona,
+        'verbosity': self.verbosity,
+        'creativity': self.creativity
         }
 
 
@@ -123,11 +134,12 @@ def newTeammate():
 
     data = request.json
 
-    teammate = Teammate(data['name'], data['title'], data['character'], data['verbose'], data['temperature'])
+    # Create new DB record
+    newTeammate = supabase.table("teammates").insert(data).execute()
 
-    teammateData.append(teammate)
-    
-    return jsonify(teammate.id)
+    print(newTeammate)
+    teammateData.append(newTeammate.data[0])
+    return newTeammate.data[0].id
 
 
 @app.route('/api/messages/new-message-text', methods=['POST'])
@@ -151,7 +163,7 @@ def newMessage():
 
 @app.route('/api/messages/new-message-audio', methods=['POST'])
 def newMessageAudio():
-
+ 
     print('request received')
 
     # Retrieve Data
