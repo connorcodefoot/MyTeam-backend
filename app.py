@@ -1,5 +1,5 @@
 # General Config
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, json
 from dotenv.main import load_dotenv
 from werkzeug.utils import secure_filename
 import os
@@ -45,42 +45,38 @@ conversations = []
 
 class Conversation:
 
-    next_id = 0
-
     def __init__(self, teammate):
-        self.id = Conversation.next_id
-        Conversation.next_id += 1
-        self.teammateID = teammate.id
-        self.messages = []
+        self.teammateID = teammate["id"]
+        # self.messages = []
         self.llm = OpenAI(
-            temperature=teammate.creativity,
+            temperature=teammate["creativity"],
             openai_api_key=os.getenv("OPENAI_API_KEY"),
             model_name="text-davinci-003"
         )
 
-        self.template = teammate.persona + """
-            Current conversation:
-            {history}
-            Coworker: {input}
-            """ + teammate.title + ':'
+        # self.template = teammate["persona"] + """
+        #     Current conversation:
+        #     {history}
+        #     Coworker: {input}
+        #     """ + teammate["title"] + ':'
 
-        self.PROMPT = PromptTemplate(
-            input_variables=["history", "input"], template=self.template
-        )
+        # self.PROMPT = PromptTemplate(
+        #     input_variables=["history", "input"], template=self.template
+        # )
 
-        self.conversation = ConversationChain(
-            prompt=self.PROMPT,
-            llm=self.llm,
-            verbose=True,
-            memory=ConversationBufferMemory(
-                ai_prefix=teammate.title, human_prefix="Manager")
-        )
+        # self.conversation = ConversationChain(
+        #     prompt=self.PROMPT,
+        #     llm=self.llm,
+        #     verbose=True,
+        #     memory=ConversationBufferMemory(
+        #         ai_prefix=teammate["title"], human_prefix="Human")
+        # )
 
-        self.googleTool = Tool(
-            name="Google Search",
-            description="Search Google for recent results.",
-            func=search.run,
-        )
+        # self.googleTool = Tool(
+        #     name="Google Search",
+        #     description="Search Google for recent results.",
+        #     func=search.run,
+        # )
 
     def print_conversation(self):
         print("Conversation ID:", self.id)
@@ -95,32 +91,14 @@ class Conversation:
             'message': message
         })
 
-
-class Teammate:
-
-    next_id = 0
-
-    def __init__(self, name, title, persona, verbosity, creativity):
-        self.id = Teammate.next_id
-        Teammate.next_id += 1
-        self.name = name
-        self.title = title
-        self.persona = persona
-        self.verbosity = verbosity
-        self.creativity = creativity
-
-    def to_dict(self):
-        return {
-        'id': self.id,
-        'name': self.name,
-        'title': self.title,
-        'persona': self.persona,
-        'verbosity': self.verbosity,
-        'creativity': self.creativity
-        }
-
-
-
+# Custom JSON Encoder class
+class PersonEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, Conversation):
+            # Convert Conversation object to a dictionary representation
+            return {'name': obj.name, 'age': obj.age}
+        # For other types, use the default encoder behavior
+        return json.JSONEncoder.default(self, obj)
 # ROUTES
 
 @app.route('/api/teammates', methods=['GET'])
@@ -137,9 +115,8 @@ def newTeammate():
     # Create new DB record
     newTeammate = supabase.table("teammates").insert(data).execute()
 
-    print(newTeammate)
-    teammateData.append(newTeammate.data[0])
-    return newTeammate.data[0].id
+    # Create new conversation
+    return jsonify(newTeammate.data[0]['id'])
 
 
 @app.route('/api/messages/new-message-text', methods=['POST'])
@@ -191,10 +168,23 @@ def newConversation():
     # Parse Data
     teammateID = request.json.get('data')
 
-    # # Get teammate
-    teammate = next((t for t in teammateData if t.id == teammateID), None)
+    # Get teammate from DB
+    teammate = supabase.table("teammates").select("*").eq("id", teammateID).execute()
+
+    teammate = teammate.data[0]
+
+    # Create conversation object
+    conversation = Conversation(teammate)
+    conversationJSON = json.dumps(conversation.__dict__)
+    conversationJSON = json.loads(conversationJSON)
+
+
+    # Add conversation to DB
+    conversationDB = supabase.table("conversations").insert(conversationJSON).execute()
+    print(conversationDB)
+
+    # print(conversationDB)
 
     # # Create Conversation
-    conversation = Conversation(teammate)
-    conversations.append(conversation)
-    return jsonify(conversation.id)
+    
+    # return jsonify(conversation.id)
