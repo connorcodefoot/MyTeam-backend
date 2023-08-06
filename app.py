@@ -42,41 +42,60 @@ teammateData = []
 
 conversations = []
 
-print('test')
 class Conversation:
 
     def __init__(self, teammate):
         self.teammateID = teammate["id"]
         # self.messages = []
-        self.llm = OpenAI(
-            temperature=teammate["creativity"],
+        self.llm_type = 'OpenAI'
+        self.teammate_temperature = teammate["creativity"]
+        self.model_name = "text-davinci-003"
+        self.teammate_persona = teammate["persona"]
+        self.teammate_title = teammate["title"]
+
+
+    def initializeConversation(self):
+
+        OpenAI(
+            temperature=self.teammate_temperature,
             openai_api_key=os.getenv("OPENAI_API_KEY"),
-            model_name="text-davinci-003"
+            model_name= self.model_name
         )
 
-        # self.template = teammate["persona"] + """
-        #     Current conversation:
-        #     {history}
-        #     Coworker: {input}
-        #     """ + teammate["title"] + ':'
+        conversation_template = self.teammate_persona + """
+            Current conversation:
+            {history}d
+            Coworker: {input}
+            """ + self.teammate_title + ':'
 
-        # self.PROMPT = PromptTemplate(
-        #     input_variables=["history", "input"], template=self.template
-        # )
+        createPrompt = PromptTemplate(
+            input_variables=["history", "input"], template= conversation_template
+        )
 
-        # self.conversation = ConversationChain(
-        #     prompt=self.PROMPT,
-        #     llm=self.llm,
-        #     verbose=True,
-        #     memory=ConversationBufferMemory(
-        #         ai_prefix=teammate["title"], human_prefix="Human")
-        # )
+        ConversationChain(
+            prompt=createPrompt,
+            llm=OpenAI,
+            verbose=True,
+            memory=ConversationBufferMemory(
+                ai_prefix=self.teammate_title, human_prefix="Human")
+        )
 
-        # self.googleTool = Tool(
-        #     name="Google Search",
-        #     description="Search Google for recent results.",
-        #     func=search.run,
-        # )
+        self.googleTool = Tool(
+            name="Google Search",
+            description="Search Google for recent results.",
+            func=search.run,
+        )
+    
+    def to_json(self):
+        return {
+            'teammateID': self.teammateID,
+            # 'messages': self.messages,
+            'llm_type': self.llm_type,
+            'teammate_temperature': self.teammate_temperature,
+            'model_name': self.model_name,
+            'teammate_persona': self.teammate_persona,
+            'teammate_title': self.teammate_title
+        }
 
     def print_conversation(self):
         print("Conversation ID:", self.id)
@@ -91,14 +110,6 @@ class Conversation:
             'message': message
         })
 
-# Custom JSON Encoder class
-class PersonEncoder(json.JSONEncoder):
-    def default(self, obj):
-        if isinstance(obj, Conversation):
-            # Convert Conversation object to a dictionary representation
-            return {'name': obj.name, 'age': obj.age}
-        # For other types, use the default encoder behavior
-        return json.JSONEncoder.default(self, obj)
 # ROUTES
 
 @app.route('/api/teammates', methods=['GET'])
@@ -175,16 +186,17 @@ def newConversation():
 
     # Create conversation object
     conversation = Conversation(teammate)
-    conversationJSON = json.dumps(conversation.__dict__)
-    conversationJSON = json.loads(conversationJSON)
+    conversationJSON = conversation.to_json()
+    print(conversationJSON)
 
 
     # Add conversation to DB
-    conversationDB = supabase.table("conversations").insert(conversationJSON).execute()
-    print(conversationDB)
-
-    # print(conversationDB)
+    conversationDB = supabase.table("conversations").insert(conversationJSON
+    ).execute()
+    print("conversationDB:", conversationDB)
 
     # # Create Conversation
+
+    conversation.initializeConversation()
     
-    # return jsonify(conversation.id)
+    return jsonify(conversationDB[0]['id'])
