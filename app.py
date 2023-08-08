@@ -27,9 +27,9 @@ google_cse_id= os.getenv("GOOGLE_CSE_ID")
 search = GoogleSearchAPIWrapper()
 
 # Picovoice 
-import pvleopard
-picovoice_access_key = os.getenv("PICOVOICE_ACCESS_KEY")
-handle = pvleopard.create(picovoice_access_key)
+# import pvleopard
+# picovoice_access_key = os.getenv("PICOVOICE_ACCESS_KEY")
+# handle = pvleopard.create(picovoice_access_key)
 
 # Initiate App
 app = Flask(__name__)
@@ -56,7 +56,7 @@ class Conversation:
 
     def initializeConversation(self):
 
-        OpenAI(
+        llm= OpenAI(
             temperature=self.teammate_temperature,
             openai_api_key=os.getenv("OPENAI_API_KEY"),
             model_name= self.model_name
@@ -64,7 +64,7 @@ class Conversation:
 
         conversation_template = self.teammate_persona + """
             Current conversation:
-            {history}d
+            {history}
             Coworker: {input}
             """ + self.teammate_title + ':'
 
@@ -74,7 +74,7 @@ class Conversation:
 
         ConversationChain(
             prompt=createPrompt,
-            llm=OpenAI,
+            llm=llm,
             verbose=True,
             memory=ConversationBufferMemory(
                 ai_prefix=self.teammate_title, human_prefix="Human")
@@ -102,7 +102,7 @@ class Conversation:
         print("Conversation Chain:", self.conversation)
 
     def predict(self, input):
-        return self.conversation.predict(input=str(input))
+        return self.conversation_thread.predict(input=str(input))
 
     def newMessage(self, message):
         self.messages.append({
@@ -114,8 +114,11 @@ class Conversation:
 
 @app.route('/api/teammates', methods=['GET'])
 def getTeam():
-    team_dict = [teammate.to_dict() for teammate in teammateData]
-    return jsonify(team_dict)
+
+    teammates = supabase.table("teammates").select('*').execute()
+    print(teammates)
+
+    return jsonify(teammates.data)
 
 
 @app.route('/api/teammates/new', methods=['POST'])
@@ -138,39 +141,44 @@ def newMessage():
     conversation_id = int(data.get('conversationID'))
     input = data.get('input')
 
-    # Find conversation with matching ID
-    conversation = next((convo for convo in conversations if convo.id == conversation_id), None)
-    if conversation and "search" in input:
-        conversation.newMessage(input)
-        return conversation.googleTool.run(input)
-    if conversation:
-        conversation.newMessage(input)
-        return conversation.predict(input)
-    else:
-        print("Conversation not found")
 
-@app.route('/api/messages/new-message-audio', methods=['POST'])
-def newMessageAudio():
+    conversation = supabase.table("conversations").select('id').eq('id', conversation_id)
+
+    return conversation.conversation_thread.predict(input=str(input))
+
+    # # Find conversation with matching ID
+    # conversation = next((convo for convo in conversations if convo.id == conversation_id), None)
+    # if conversation and "search" in input:
+    #     conversation.newMessage(input)
+    #     return conversation.googleTool.run(input)
+    # if conversation:
+    #     conversation.newMessage(input)
+    #     return conversation.predict(input)
+    # else:
+    #     print("Conversation not found")
+
+# @app.route('/api/messages/new-message-audio', methods=['POST'])
+# def newMessageAudio():
  
-    print('request received')
+#     print('request received')
 
-    # Retrieve Data
-    conversation_id = request.form['conversationID']
-    audio = request.files['file']
+#     # Retrieve Data
+#     conversation_id = request.form['conversationID']
+#     audio = request.files['file']
 
-    # Save audio and get transcript
-    audio_filename = secure_filename(audio.filename)
-    audio_path = os.path.join('audioMessages', audio_filename)
-    audio.save(audio_path)
-    transcript, words = handle.process_file(audio_path)
+#     # Save audio and get transcript
+#     audio_filename = secure_filename(audio.filename)
+#     audio_path = os.path.join('audioMessages', audio_filename)
+#     audio.save(audio_path)
+#     transcript, words = handle.process_file(audio_path)
 
-    # Find conversation with matching ID
-    conversation = next((convo for convo in conversations if convo.id == conversation_id), None)
-    if conversation:
-        conversation.newMessage(transcript)
-        return conversation.predict(transcript)
-    else:
-        print("Conversation not found")
+#     # Find conversation with matching ID
+#     conversation = next((convo for convo in conversations if convo.id == conversation_id), None)
+#     if conversation:
+#         conversation.newMessage(transcript)
+#         return conversation.predict(transcript)
+#     else:
+#         print("Conversation not found")
 
 
 @app.route('/api/conversations/new', methods=['POST'])
@@ -197,6 +205,6 @@ def newConversation():
 
     # # Create Conversation
 
-    conversation.initializeConversation()
+    conversation.conversation_thread = conversation.initializeConversation()
     
-    return jsonify(conversationDB[0]['id'])
+    return jsonify(conversationDB.data[0]['id'])
