@@ -1,9 +1,7 @@
 # General Config
-from flask import Flask, request, jsonify, json
+from flask import Flask, request, jsonify
 from dotenv.main import load_dotenv
-from werkzeug.utils import secure_filename
 import os
-import math
 
 load_dotenv ()
 
@@ -26,55 +24,45 @@ google_api_key= os.getenv("GOOGLE_API_KEY")
 google_cse_id= os.getenv("GOOGLE_CSE_ID")
 search = GoogleSearchAPIWrapper()
 
-# Picovoice 
-# import pvleopard
-# picovoice_access_key = os.getenv("PICOVOICE_ACCESS_KEY")
-# handle = pvleopard.create(picovoice_access_key)
-
 # Initiate App
 app = Flask(__name__)
 
-# Temp Data
+# APPLICATION
 
-database = supabase.table("teammates").select("*").execute() 
-
-teammateData = []
-
-conversations = []
+# Classes
 
 class Conversation:
 
-    def __init__(self, teammate):
-        self.teammateID = teammate["id"]
-        # self.messages = []
-        self.llm_type = 'OpenAI'
-        self.teammate_temperature = teammate["creativity"]
+    def __init__(self, data):
+        self.id = data['id']
+        self.teammateID = data['teammateID']
+        self.messages = []
+        self.llm_type = data['llm_type']
+        self.teammate_temperature = data['teammate_temperature']
         self.model_name = "text-davinci-003"
-        self.teammate_persona = teammate["persona"]
-        self.teammate_title = teammate["title"]
+        self.teammate_name = data['teammate_name']
+        self.teammate_persona = data['teammate_persona']
+        self.teammate_title = data['teammate_title']
 
-
-    def initializeConversation(self):
-
-        llm= OpenAI(
+        self.llm= OpenAI(
             temperature=self.teammate_temperature,
             openai_api_key=os.getenv("OPENAI_API_KEY"),
             model_name= self.model_name
         )
 
-        conversation_template = self.teammate_persona + """
+        self.conversation_template = self.teammate_persona + """
             Current conversation:
             {history}
             Coworker: {input}
-            """ + self.teammate_title + ':'
+            """ + self.teammate_name + ':'
 
-        createPrompt = PromptTemplate(
-            input_variables=["history", "input"], template= conversation_template
+        self.createPrompt = PromptTemplate(
+            input_variables=["history", "input"], template= self.conversation_template
         )
 
-        ConversationChain(
-            prompt=createPrompt,
-            llm=llm,
+        self.conversation_thread = ConversationChain(
+            prompt=self.createPrompt,
+            llm=self.llm,
             verbose=True,
             memory=ConversationBufferMemory(
                 ai_prefix=self.teammate_title, human_prefix="Human")
@@ -88,11 +76,13 @@ class Conversation:
     
     def to_json(self):
         return {
+            'id': self.id,
             'teammateID': self.teammateID,
-            # 'messages': self.messages,
+            'messages': self.messages,
             'llm_type': self.llm_type,
             'teammate_temperature': self.teammate_temperature,
             'model_name': self.model_name,
+            'teammate_name': self.teammate_name,
             'teammate_persona': self.teammate_persona,
             'teammate_title': self.teammate_title
         }
@@ -101,22 +91,65 @@ class Conversation:
         print("Conversation ID:", self.id)
         print("Conversation Chain:", self.conversation)
 
-    def predict(self, input):
-        return self.conversation_thread.predict(input=str(input))
+    def predict(self, message):
+        return self.conversation_thread.predict(input=str(message))
 
-    def newMessage(self, message):
+    def new_message(self, message):
         self.messages.append({
-            'id': len(self.messages) + 1,
-            'message': message
+            "id": message['id'],
+            "message": message['message'],
+            "from": message['from'],
+            "to": message["to"]
         })
 
+# IMPORT TEAMMATE DATA
+
+teammate_data = supabase.table("teammates").select('*').execute()
+teammate_data = teammate_data.data
+
+# IMPORT CONVERSATION DATA AND CREATE INSTANCES
+conversation_data = []
+conversation_data_raw = supabase.table("conversations").select('*').execute()
+
+for conversation in conversation_data_raw.data:
+
+    conversation_data.append(Conversation(conversation))
+
+# IMPORT MESSAGE DATA AND ADD TO CONVERSATIONS
+
+message_data = supabase.table("messages").select('*').execute()
+message_data = message_data.data
+
+for message in message_data:
+
+    conversation_id = message['conversation_id']
+
+    for conversation in conversation_data:
+
+        conversation_json = conversation.to_json()
+        
+        if conversation_json['id'] == conversation_id:
+            
+            conversation.new_message(message)
+
 # ROUTES
+
+@app.route('/api/load', methods=['GET'])
+def loadApp():
+
+    conversation_data_json = [conversation.to_json() for conversation in conversation_data]
+
+    print(conversation_data_json)
+
+    
+    return jsonify(teammate_data, conversation_data_json)
+    
+
 
 @app.route('/api/teammates', methods=['GET'])
 def getTeam():
 
     teammates = supabase.table("teammates").select('*').execute()
-    print(teammates)
 
     return jsonify(teammates.data)
 
@@ -129,6 +162,8 @@ def newTeammate():
     # Create new DB record
     newTeammate = supabase.table("teammates").insert(data).execute()
 
+    teammate_data.append(newTeammate.data[0])
+
     # Create new conversation
     return jsonify(newTeammate.data[0]['id'])
 
@@ -137,25 +172,44 @@ def newTeammate():
 def newMessage():
 
     # Parse Data
-    data = request.json
-    conversation_id = int(data.get('conversationID'))
-    input = data.get('input')
+    message = request.json
+
+    conversation_id = message['conversationID']
+    message = message['input']
+
+    for convo in conversation_data:
+
+        convo_data_json = convo.to_json()
+
+        if convo_data_json['id'] == conversation_id:
+
+            message_response = convo.predict(message)
+            message_response = str(message_response)
+           
+            message_from_user = supabase.table("messages").insert({
+                "conversation_id": conversation_id,
+                "teammateID": convo_data_json['teammateID'],
+                "to": convo_data_json['teammate_name'],
+                "from": 'You',
+                "message": message 
+            }).execute()
+
+            message_to_user = supabase.table("messages").insert({
+                "conversation_id": conversation_id,
+                "teammateID": convo_data_json['teammateID'],
+                "to": 'user',
+                "from": convo_data_json['teammate_name'],
+                "message": message_response 
+            }).execute()
+
+            convo.new_message(message_from_user.data[0])
+            convo.new_message(message_to_user.data[0])
+
+            return message_response
 
 
-    conversation = supabase.table("conversations").select('id').eq('id', conversation_id)
+        
 
-    return conversation.conversation_thread.predict(input=str(input))
-
-    # # Find conversation with matching ID
-    # conversation = next((convo for convo in conversations if convo.id == conversation_id), None)
-    # if conversation and "search" in input:
-    #     conversation.newMessage(input)
-    #     return conversation.googleTool.run(input)
-    # if conversation:
-    #     conversation.newMessage(input)
-    #     return conversation.predict(input)
-    # else:
-    #     print("Conversation not found")
 
 # @app.route('/api/messages/new-message-audio', methods=['POST'])
 # def newMessageAudio():
@@ -185,26 +239,25 @@ def newMessage():
 def newConversation():
 
     # Parse Data
-    teammateID = request.json.get('data')
+    teammateID = request.json['teammateID']   
 
     # Get teammate from DB
     teammate = supabase.table("teammates").select("*").eq("id", teammateID).execute()
-
     teammate = teammate.data[0]
 
-    # Create conversation object
-    conversation = Conversation(teammate)
-    conversationJSON = conversation.to_json()
-    print(conversationJSON)
+    conversation_insert = supabase.table("conversations").insert({
+        "teammateID": teammate['id'], 
+        "teammate_name" : teammate['name'], 
+        "teammate_temperature": teammate['creativity'], 
+        "teammate_persona" : teammate['persona'], 
+        "teammate_title" : teammate['title']
+    }).execute()
 
+    # Create conversation object and itialize conversation with LLM
+    conversation = Conversation(conversation_insert.data[0])
+    conversation_data.append(conversation)
+    print(conversation_data)
 
-    # Add conversation to DB
-    conversationDB = supabase.table("conversations").insert(conversationJSON
-    ).execute()
-    print("conversationDB:", conversationDB)
-
-    # # Create Conversation
-
-    conversation.conversation_thread = conversation.initializeConversation()
+    conversation = conversation.to_json()
     
-    return jsonify(conversationDB.data[0]['id'])
+    return conversation
