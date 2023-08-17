@@ -1,17 +1,16 @@
-# General Config
+# GENERAL CONFIG
 from flask import Flask, request, jsonify
 from dotenv.main import load_dotenv
 import os
-
 load_dotenv ()
 
-# Supabase
+# SUPABASE
 from supabase import create_client
 supabaseURL = os.environ.get("SUPABASE_URL")
 supabaseKey = os.environ.get("SUPABASE_KEY")
 supabase = create_client(supabaseURL, supabaseKey)
 
-# LangChain and OpenAI
+# LANGCHAIN AND OPENAI
 from langchain.prompts.prompt import PromptTemplate
 from langchain.chains import ConversationChain
 from langchain.chains.conversation.memory import ConversationBufferMemory
@@ -19,17 +18,17 @@ from langchain import OpenAI
 from langchain.tools import Tool
 from langchain.utilities import GoogleSearchAPIWrapper
 
-## Google Search for Langchain global params
+## GOOGLE FOR LANGCHAIN
 google_api_key= os.getenv("GOOGLE_API_KEY")
 google_cse_id= os.getenv("GOOGLE_CSE_ID")
 search = GoogleSearchAPIWrapper()
 
-# Initiate App
+# INITIATE APP
 app = Flask(__name__)
 
 # APPLICATION
 
-# Classes
+# CLASSES
 
 class Conversation:
 
@@ -138,13 +137,9 @@ for message in message_data:
 def loadApp():
 
     conversation_data_json = [conversation.to_json() for conversation in conversation_data]
-
-    print(conversation_data_json)
-
     
     return jsonify(teammate_data, conversation_data_json)
     
-
 
 @app.route('/api/teammates', methods=['GET'])
 def getTeam():
@@ -162,28 +157,34 @@ def newTeammate():
     # Create new DB record
     newTeammate = supabase.table("teammates").insert(data).execute()
 
+    # Add teammate to data cache
     teammate_data.append(newTeammate.data[0])
 
-    # Create new conversation
-    return jsonify(newTeammate.data[0]['id'])
+    return jsonify(newTeammate.data[0])
 
 
 @app.route('/api/messages/new-message-text', methods=['POST'])
 def newMessage():
 
     # Parse Data
-    message = request.json
+    data = request.json
 
-    conversation_id = message['conversationID']
-    message = message['input']
-
+    conversation_id = data['conversationID']
+    message = data['message']
+    
     for convo in conversation_data:
 
         convo_data_json = convo.to_json()
 
         if convo_data_json['id'] == conversation_id:
 
-            message_response = convo.predict(message)
+
+            if "search" in message:
+                message_response = convo.googleTool.run(message)
+                
+                message_response = convo.predict(message)
+
+
             message_response = str(message_response)
            
             message_from_user = supabase.table("messages").insert({
@@ -191,7 +192,7 @@ def newMessage():
                 "teammateID": convo_data_json['teammateID'],
                 "to": convo_data_json['teammate_name'],
                 "from": 'You',
-                "message": message 
+                "message": message
             }).execute()
 
             message_to_user = supabase.table("messages").insert({
@@ -205,34 +206,7 @@ def newMessage():
             convo.new_message(message_from_user.data[0])
             convo.new_message(message_to_user.data[0])
 
-            return message_response
-
-
-        
-
-
-# @app.route('/api/messages/new-message-audio', methods=['POST'])
-# def newMessageAudio():
- 
-#     print('request received')
-
-#     # Retrieve Data
-#     conversation_id = request.form['conversationID']
-#     audio = request.files['file']
-
-#     # Save audio and get transcript
-#     audio_filename = secure_filename(audio.filename)
-#     audio_path = os.path.join('audioMessages', audio_filename)
-#     audio.save(audio_path)
-#     transcript, words = handle.process_file(audio_path)
-
-#     # Find conversation with matching ID
-#     conversation = next((convo for convo in conversations if convo.id == conversation_id), None)
-#     if conversation:
-#         conversation.newMessage(transcript)
-#         return conversation.predict(transcript)
-#     else:
-#         print("Conversation not found")
+            return message_to_user.data[0]
 
 
 @app.route('/api/conversations/new', methods=['POST'])
@@ -256,7 +230,6 @@ def newConversation():
     # Create conversation object and itialize conversation with LLM
     conversation = Conversation(conversation_insert.data[0])
     conversation_data.append(conversation)
-    print(conversation_data)
 
     conversation = conversation.to_json()
     
