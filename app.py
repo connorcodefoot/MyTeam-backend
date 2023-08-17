@@ -105,9 +105,10 @@ class Conversation:
             "to": message["to"]
         })
 
-# SIGN UP
+# AUTH
 
-
+app.config["JWT_SECRET_KEY"] = "bad-dogs-are-good-dogs"
+jwt = JWTManager(app)
 
 # IMPORT TEAMMATE DATA
 
@@ -139,12 +140,17 @@ for message in message_data:
             
             conversation.new_message(message)
 
-
-# AUTH
-
-
-
 # ROUTES
+
+@app.route('/api/token', methods=["POST"])
+def create_token():
+
+    auth_request = request.json
+
+    print('auth request:', auth_request)
+    data = supabase.auth.sign_in_with_password({"email": "jon@bones.com", "password": "weed2"})
+    print('this is the response', data)
+    return 'user exists'
 
 @app.route('/api/load', methods=['GET'])
 def loadApp():
