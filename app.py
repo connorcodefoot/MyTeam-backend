@@ -4,13 +4,17 @@ from dotenv.main import load_dotenv
 import os
 load_dotenv ()
 
-# SUPABASE
+# AUTH CONFIG
+from datetime import datetime, timedelta, timezone
+from flask_jwt_extended import create_access_token,get_jwt,get_jwt_identity, unset_jwt_cookies, jwt_required, JWTManager
+
+# SUPABASE CONFIG
 from supabase import create_client
 supabaseURL = os.environ.get("SUPABASE_URL")
 supabaseKey = os.environ.get("SUPABASE_KEY")
 supabase = create_client(supabaseURL, supabaseKey)
 
-# LANGCHAIN AND OPENAI
+# LANGCHAIN AND OPENAI CONFIG
 from langchain.prompts.prompt import PromptTemplate
 from langchain.chains import ConversationChain
 from langchain.chains.conversation.memory import ConversationBufferMemory
@@ -18,7 +22,7 @@ from langchain import OpenAI
 from langchain.tools import Tool
 from langchain.utilities import GoogleSearchAPIWrapper
 
-## GOOGLE FOR LANGCHAIN
+## GOOGLE FOR LANGCHAIN CONFIG
 google_api_key= os.getenv("GOOGLE_API_KEY")
 google_cse_id= os.getenv("GOOGLE_CSE_ID")
 search = GoogleSearchAPIWrapper()
@@ -101,6 +105,10 @@ class Conversation:
             "to": message["to"]
         })
 
+# SIGN UP
+
+
+
 # IMPORT TEAMMATE DATA
 
 teammate_data = supabase.table("teammates").select('*').execute()
@@ -130,6 +138,11 @@ for message in message_data:
         if conversation_json['id'] == conversation_id:
             
             conversation.new_message(message)
+
+
+# AUTH
+
+
 
 # ROUTES
 
